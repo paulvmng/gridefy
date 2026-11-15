@@ -1,0 +1,21 @@
+# Dependencies & build output
+node_modules/
+dist/
+*.local
+
+# Environment
+.env
+.env.*
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
+
+# Local dev notes (not part of the game)
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+devnotes/
