@@ -24,5 +24,21 @@ canvas {
   pointer-events: none; /* clicks go through to the game */
 }
 
+#msg {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border-radius: 6px;
+  background: rgba(180, 40, 40, 0.85);
+  color: #fff;
+  font-size: 14px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+#msg.visible { opacity: 1; }
+
 #hud .spawn { color: #ff5a5a; }
 #hud .base  { color: #4da3ff; }

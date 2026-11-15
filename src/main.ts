@@ -1,12 +1,18 @@
 import './style.css';
-import { createWorld } from './grid';
+import type { Cell } from './config';
+import { Block, createWorld } from './grid';
+import { checkDelete, checkPlace } from './edit';
 import { createScene } from './render/scene';
 import { BlockRenderer } from './render/blocks';
 import { createBoundsOutline, createMarkers } from './render/markers';
+import { Picker, type Pick } from './render/picker';
+import { Ghost } from './render/ghost';
+import { onClick } from './input/clicks';
+import { Message } from './ui/message';
 
 // --- Setup -------------------------------------------------------------
 const grid = createWorld();
-const { renderer, scene, camera, controls } = createScene(document.getElementById('app')!);
+const { renderer, scene, camera, controls, clampPan } = createScene(document.getElementById('app')!);
 
 const blocks = new BlockRenderer(grid);
 blocks.sync(grid);
@@ -15,6 +21,54 @@ scene.add(blocks.mesh);
 const markers = createMarkers();
 scene.add(markers.spawn, markers.base, createBoundsOutline(grid));
 
+const picker = new Picker(camera, renderer.domElement, blocks.mesh);
+const ghost = new Ghost();
+scene.add(ghost.mesh);
+const message = new Message(document.getElementById('msg')!);
+
+// --- Editing -----------------------------------------------------------
+
+// A new block goes against the face you clicked:
+// the hit block's cell + the face direction.
+function placeTarget(p: Pick): Cell {
+  return { x: p.cell.x + p.normal.x, y: p.cell.y + p.normal.y, z: p.cell.z + p.normal.z };
+}
+
+onClick(renderer.domElement, (button, x, y) => {
+  const p = picker.pick(x, y);
+  if (!p) return;
+
+  if (button === 0) {
+    // Left-click: place.
+    const target = placeTarget(p);
+    const error = checkPlace(grid, target);
+    if (error) return message.show(error);
+    grid.set(target.x, target.y, target.z, Block.Placed);
+  } else if (button === 2) {
+    // Right-click: delete.
+    const error = checkDelete(grid, p.cell);
+    if (error) return message.show(error);
+    grid.set(p.cell.x, p.cell.y, p.cell.z, Block.Air);
+  } else {
+    return;
+  }
+
+  blocks.sync(grid); // the data changed, so redraw the boxes
+});
+
+// Remember where the mouse is. The ghost is updated every frame (below),
+// so it also stays correct while the camera moves.
+let pointer: { x: number; y: number } | null = null;
+renderer.domElement.addEventListener('pointermove', (e) => (pointer = { x: e.clientX, y: e.clientY }));
+renderer.domElement.addEventListener('pointerleave', () => (pointer = null));
+
+function updateGhost(): void {
+  const p = pointer && picker.pick(pointer.x, pointer.y);
+  if (!p) return ghost.hide();
+  const target = placeTarget(p);
+  ghost.show(target, checkPlace(grid, target) === null);
+}
+
 // --- Game loop ---------------------------------------------------------
 // update(dt) changes the game state; render draws it. dt = seconds since the
 // last frame. Multiplying speeds by dt makes things move at the same speed
@@ -22,6 +76,8 @@ scene.add(markers.spawn, markers.base, createBoundsOutline(grid));
 
 function update(dt: number): void {
   markers.base.rotation.y += 1.0 * dt; // 1 radian per second, at any frame rate
+  updateGhost();
+  message.update(dt);
 }
 
 let last = performance.now();
@@ -33,6 +89,7 @@ function frame(now: number): void {
 
   update(dt);
   controls.update(); // needed every frame for damping
+  clampPan(); // keep the camera target inside the grid
   renderer.render(scene, camera);
 
   requestAnimationFrame(frame); // ask the browser to call us again next frame
