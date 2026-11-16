@@ -79,26 +79,27 @@ const ghost = new Ghost();
 scene.add(ghost.mesh);
 const message = new Message(document.getElementById('msg')!);
 
-// Every enemy on the field. A new one spawns every SPAWN_INTERVAL seconds;
+// Every enemy on the field. The waves decide when a new one spawns (waves.ts);
 // enemies that reach the base or die are removed (see update()).
 let enemies: Enemy[] = [];
-const SPAWN_INTERVAL = 2; // seconds
-// Same "count up and keep the leftover" timer as a tower's cooldown.
-// Starting full means the first enemy spawns on the first frame.
-let spawnTimer = SPAWN_INTERVAL;
 const enemyView = new EnemyView();
 scene.add(enemyView.mesh);
 
 // Every cell any enemy is touching. Edits must keep ALL of them connected to the base.
 const enemyCells = () => enemies.flatMap((e) => e.cells());
 
-// The match: lives and money (later waves). The HUD just shows what's in it.
+// The match: lives, money and waves. The HUD just shows what's in it.
 const game = new Game();
 const livesInfo = document.getElementById('lives')!;
 const moneyInfo = document.getElementById('money')!;
+const waveInfo = document.getElementById('wave')!;
 function showHud(): void {
   livesInfo.textContent = String(game.lives);
   moneyInfo.textContent = String(game.money);
+  const w = game.waves;
+  const n = Math.min(w.index + 1, w.total); // shown 1-based; stays at the last one when done
+  const next = w.state === 'break' ? ` · next in ${Math.ceil(w.breakLeft)}s` : '';
+  waveInfo.textContent = `${n}/${w.total}${next}`;
 }
 showHud();
 
@@ -172,12 +173,11 @@ function update(dt: number): void {
   if (game.over) return ghost.hide();
   updateGhost();
 
-  // Spawn. If the field is full, skip this spawn instead of saving it up,
-  // so there's no burst of enemies later.
-  spawnTimer += dt;
-  if (spawnTimer >= SPAWN_INTERVAL) {
-    spawnTimer -= SPAWN_INTERVAL;
-    if (enemies.length < MAX_ENEMIES) enemies.push(new Enemy(SPAWN));
+  // Spawn when the waves say so. `enemies.length` is how many are alive: the
+  // waves wait for 0 before starting the next break (or declaring the win).
+  // MAX_ENEMIES is only a safety cap for the renderer; waves stay well below it.
+  if (game.waves.update(dt, enemies.length) && enemies.length < MAX_ENEMIES) {
+    enemies.push(new Enemy(SPAWN));
   }
 
   // Logic first: the enemies move...
@@ -202,7 +202,8 @@ function update(dt: number): void {
     if (enemy.dead) game.enemyKilled();
   }
   showHud();
-  if (game.over) message.show('Game over! Reload the page to play again.', Infinity);
+  if (game.lost) message.show('Game over! Reload the page to play again.', Infinity);
+  else if (game.won) message.show('You win! Every wave cleared. Reload to play again.', Infinity);
 
   enemies = enemies.filter((e) => !e.arrived && !e.dead);
   enemyView.sync(enemies); // then copy the result to the screen

@@ -1,8 +1,9 @@
 // The state of the match as a whole: things that don't belong to any one
 // enemy or tower. Plain data plus rules (no DOM, no Three.js), like enemy.ts.
-// The HUD only READS this. Waves will live here too, later.
+// The HUD only READS this.
 
 import { Block } from './grid';
+import { Waves } from './waves';
 
 export const START_LIVES = 10;
 export const START_MONEY = 20;
@@ -18,9 +19,20 @@ const costOf = (block: Block) => COST[block] ?? 0;
 export class Game {
   lives = START_LIVES;
   money = START_MONEY;
+  waves = new Waves();
 
-  get over(): boolean {
+  get lost(): boolean {
     return this.lives <= 0;
+  }
+
+  // Won = every wave has been sent AND the field is empty (see waves.ts).
+  get won(): boolean {
+    return this.waves.state === 'done';
+  }
+
+  // Either way the match has ended: the logic freezes and building stops.
+  get over(): boolean {
+    return this.lost || this.won;
   }
 
   // An enemy reached the base. Lives never go below 0.
