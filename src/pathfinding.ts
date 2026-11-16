@@ -30,6 +30,7 @@ export function canStand(grid: Grid, x: number, y: number, z: number): boolean {
 // These moves are SYMMETRIC: if A → B is allowed, so is B → A, because both
 // need the same cell to be empty. That's what lets us search backwards from
 // the base and use the result for enemies walking forwards.
+// (The COSTS are not symmetric, though: see moveCost().)
 export function forEachMove(
   grid: Grid,
   x: number,
@@ -52,57 +53,80 @@ export function forEachMove(
   }
 }
 
-// FLOW FIELD: for every cell, the number of steps to reach the base.
-// The base is 0, its neighbors are 1, their neighbors are 2, and so on.
-// UNREACHABLE (-1) means no path. Computed with BFS (breadth-first search).
+// What one move costs an ENEMY walking from height fromY to height toY.
+// Climbing is harder, so it costs more. All costs must be at least 1.
+export const COST_LEVEL = 1;
+export const COST_UP = 2;
+export const COST_DOWN = 1;
+
+export function moveCost(fromY: number, toY: number): number {
+  if (toY > fromY) return COST_UP;
+  if (toY < fromY) return COST_DOWN;
+  return COST_LEVEL;
+}
+
+// FLOW FIELD: for every cell, the cheapest total cost to reach the base.
+// The base is 0. UNREACHABLE (-1) means no path.
+//
+// Computed with DIJKSTRA: always expand the cheapest cell we know about.
+// The costs are small whole numbers, so instead of a priority queue we use
+// BUCKETS: buckets[d] lists the cells found at cost d, and we work through
+// bucket 0, then 1, then 2... It's BFS with one queue per cost.
 export function computeFlowField(grid: Grid): Int32Array {
   const dist = new Int32Array(grid.cells.length).fill(UNREACHABLE);
-
-  // BFS queue of flat cell indices. Each cell enters it at most once, so its size
-  // can be the number of cells. `head` is the next one to read, `tail` the next free slot.
-  const queue = new Int32Array(grid.cells.length);
-  let head = 0;
-  let tail = 0;
-
   if (!canStand(grid, BASE.x, BASE.y, BASE.z)) return dist; // should never happen
 
-  // Start the wave at the base.
-  const start = grid.index(BASE.x, BASE.y, BASE.z);
-  dist[start] = 0;
-  queue[tail++] = start;
+  const buckets: number[][] = [];
+  const add = (cell: number, d: number) => {
+    dist[cell] = d;
+    (buckets[d] ??= []).push(cell);
+  };
 
-  while (head < tail) {
-    // Take the oldest cell from the queue. BFS goes in order of distance:
-    // every distance-3 cell is processed before any distance-4 cell.
-    const current = queue[head++];
-    const { x, y, z } = grid.coords(current);
-    const nextDist = dist[current] + 1;
+  add(grid.index(BASE.x, BASE.y, BASE.z), 0);
 
-    forEachMove(grid, x, y, z, (nx, ny, nz) => {
-      const n = grid.index(nx, ny, nz);
-      if (dist[n] !== UNREACHABLE) return; // already reached, by a path at least as short
-      dist[n] = nextDist;
-      queue[tail++] = n;
-    });
+  // buckets.length grows as we find more expensive cells, so this keeps going
+  // until no new buckets appear.
+  for (let d = 0; d < buckets.length; d++) {
+    for (const current of buckets[d] ?? []) {
+      // A cell can sit in two buckets if a cheaper route turned up after it was
+      // first added. Only the copy matching its final cost counts; skip the old one.
+      if (dist[current] !== d) continue;
+
+      const { x, y, z } = grid.coords(current);
+      forEachMove(grid, x, y, z, (nx, ny, nz) => {
+        const n = grid.index(nx, ny, nz);
+        // BACKWARDS: the search goes current → n, but the enemy walks n → current.
+        const cost = d + moveCost(ny, y);
+        if (dist[n] === UNREACHABLE || cost < dist[n]) add(n, cost);
+      });
+    }
   }
 
   return dist;
 }
 
-// THE DOWNHILL RULE: from cell `current` (a flat index), the neighbor with the
-// smallest distance to the base. Returns -1 if there is none: we're at the base
-// (distance 0), or this cell can't reach the base at all.
+// THE DOWNHILL RULE: from cell `current` (a flat index), the neighbor where
+// (cost of the move + that neighbor's cost to the base) is smallest.
+// Just picking the smallest neighbor isn't enough anymore: a low number behind
+// an expensive climb can be worse than a slightly higher number on the level.
+// Returns -1 at the base (cost 0) or on a cell that can't reach the base.
 // findPath() and enemies both use this, so they always agree on the route.
 export function nextCell(grid: Grid, field: Int32Array, current: number): number {
+  const here = field[current];
+  if (here <= 0) return -1; // at the base, or UNREACHABLE
+
   let best = -1;
-  let bestDist = field[current];
+  let bestTotal = Infinity;
   const { x, y, z } = grid.coords(current);
 
   forEachMove(grid, x, y, z, (nx, ny, nz) => {
     const n = grid.index(nx, ny, nz);
-    if (field[n] !== UNREACHABLE && field[n] < bestDist) {
+    // Only real progress counts (field[n] < here), so we can never walk in circles.
+    if (field[n] === UNREACHABLE || field[n] >= here) return;
+    const total = moveCost(y, ny) + field[n]; // forwards: the enemy walks current → n
+    if (total < bestTotal) {
       best = n;
-      bestDist = field[n];
+      bestTotal = total;
     }
   });
 

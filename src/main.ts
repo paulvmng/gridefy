@@ -38,7 +38,9 @@ function refreshWorld(): void {
   const path = findPath(grid, field);
   pathView.sync(path);
   heatmap.sync(grid, field);
-  pathInfo.textContent = path ? `${path.length - 1} steps` : 'BLOCKED';
+  // Steps = how many moves. Cost = what they add up to (climbs count extra).
+  const cost = field[grid.index(SPAWN.x, SPAWN.y, SPAWN.z)];
+  pathInfo.textContent = path ? `${path.length - 1} steps, cost ${cost}` : 'BLOCKED';
 }
 refreshWorld();
 
