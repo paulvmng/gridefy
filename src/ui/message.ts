@@ -12,10 +12,11 @@ export class Message {
     this.el = el;
   }
 
-  show(text: string): void {
+  // `seconds = Infinity` keeps the message up for good (used for "Game over").
+  show(text: string, seconds = SHOW_SECONDS): void {
     this.el.textContent = text;
     this.el.classList.add('visible');
-    this.timeLeft = SHOW_SECONDS;
+    this.timeLeft = seconds;
   }
 
   update(dt: number): void {

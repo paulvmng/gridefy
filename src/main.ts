@@ -1,6 +1,7 @@
 import './style.css';
 import { SPAWN, type Cell } from './config';
 import { Enemy } from './enemy';
+import { Game } from './game';
 import { EnemyView, MAX_ENEMIES } from './render/enemyView';
 import { Block, createWorld } from './grid';
 import { checkDelete, checkPlace } from './edit';
@@ -91,6 +92,11 @@ scene.add(enemyView.mesh);
 // Every cell any enemy is touching. Edits must keep ALL of them connected to the base.
 const enemyCells = () => enemies.flatMap((e) => e.cells());
 
+// The match: lives (later money and waves). The HUD just shows what's in it.
+const game = new Game();
+const livesInfo = document.getElementById('lives')!;
+livesInfo.textContent = String(game.lives);
+
 // --- Editing -----------------------------------------------------------
 
 // A new block goes against the face you clicked:
@@ -100,6 +106,7 @@ function placeTarget(p: Pick): Cell {
 }
 
 onClick(renderer.domElement, (button, x, y) => {
+  if (game.over) return; // no building after the game has ended
   const p = picker.pick(x, y);
   if (!p) return;
 
@@ -141,9 +148,13 @@ function updateGhost(): void {
 
 function update(dt: number): void {
   markers.base.rotation.y += 1.0 * dt; // 1 radian per second, at any frame rate
-  updateGhost();
   message.update(dt);
   pathView.update(dt);
+
+  // Game over: skip all the game logic below. The scene is still drawn every
+  // frame (see frame()), so the board stays on screen, frozen.
+  if (game.over) return ghost.hide();
+  updateGhost();
 
   // Spawn. If the field is full, skip this spawn instead of saving it up,
   // so there's no burst of enemies later.
@@ -169,6 +180,13 @@ function update(dt: number): void {
   // Remove the ones that reached the base or were killed. Done AFTER the loops
   // above, in one pass: removing items from an array while looping over it
   // shifts the indexes and skips the next item.
+  // Each enemy that reached the base costs a life (counted before they're removed).
+  for (const enemy of enemies) {
+    if (enemy.arrived) game.loseLife();
+  }
+  livesInfo.textContent = String(game.lives);
+  if (game.over) message.show('Game over! Reload the page to play again.', Infinity);
+
   enemies = enemies.filter((e) => !e.arrived && !e.dead);
   enemyView.sync(enemies); // then copy the result to the screen
 }
