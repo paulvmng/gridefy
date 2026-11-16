@@ -36,8 +36,10 @@ export class Tower {
     let bestD2 = RANGE * RANGE;
 
     for (const enemy of enemies) {
-      // Another tower may have killed it earlier this same frame.
-      if (enemy.dead) continue;
+      // Another tower may have killed it earlier this same frame, or it has
+      // just reached the base (it's leaving the board, so don't waste a shot,
+      // and it can't both cost a life and pay a kill).
+      if (enemy.dead || enemy.arrived) continue;
       enemy.position(pos);
       pos.y += ENEMY_CENTER_Y; // aim at the middle of its body
       const dx = pos.x - this.cell.x;

@@ -1,7 +1,8 @@
 import './style.css';
 import { SPAWN, type Cell } from './config';
 import { Enemy } from './enemy';
-import { EnemyView } from './render/enemyView';
+import { Game } from './game';
+import { EnemyView, MAX_ENEMIES } from './render/enemyView';
 import { Block, createWorld } from './grid';
 import { checkDelete, checkPlace } from './edit';
 import { createScene } from './render/scene';
@@ -78,10 +79,29 @@ const ghost = new Ghost();
 scene.add(ghost.mesh);
 const message = new Message(document.getElementById('msg')!);
 
-// One enemy for now. When it reaches the base, a new one starts at the spawn.
-let enemy = new Enemy(SPAWN);
+// Every enemy on the field. The waves decide when a new one spawns (waves.ts);
+// enemies that reach the base or die are removed (see update()).
+let enemies: Enemy[] = [];
 const enemyView = new EnemyView();
 scene.add(enemyView.mesh);
+
+// Every cell any enemy is touching. Edits must keep ALL of them connected to the base.
+const enemyCells = () => enemies.flatMap((e) => e.cells());
+
+// The match: lives, money and waves. The HUD just shows what's in it.
+const game = new Game();
+const livesInfo = document.getElementById('lives')!;
+const moneyInfo = document.getElementById('money')!;
+const waveInfo = document.getElementById('wave')!;
+function showHud(): void {
+  livesInfo.textContent = String(game.lives);
+  moneyInfo.textContent = String(game.money);
+  const w = game.waves;
+  const n = Math.min(w.index + 1, w.total); // shown 1-based; stays at the last one when done
+  const next = w.state === 'break' ? ` · next in ${Math.ceil(w.breakLeft)}s` : '';
+  waveInfo.textContent = `${n}/${w.total}${next}`;
+}
+showHud();
 
 // --- Editing -----------------------------------------------------------
 
@@ -91,26 +111,38 @@ function placeTarget(p: Pick): Cell {
   return { x: p.cell.x + p.normal.x, y: p.cell.y + p.normal.y, z: p.cell.z + p.normal.z };
 }
 
+// Can the current tool be built at `target`? Two kinds of rules:
+// the match (money, in game.ts) and the world (edit.ts).
+// Money first: it's one comparison, while checkPlace runs a pathfinding pass.
+function placeProblem(target: Cell): string | null {
+  if (!game.canAfford(tool.block)) return 'Not enough money';
+  return checkPlace(grid, target, tool.block, enemyCells());
+}
+
 onClick(renderer.domElement, (button, x, y) => {
+  if (game.over) return; // no building after the game has ended
   const p = picker.pick(x, y);
   if (!p) return;
 
   if (button === 0) {
     // Left-click: place.
     const target = placeTarget(p);
-    const error = checkPlace(grid, target, tool.block, enemy.cells());
+    const error = placeProblem(target);
     if (error) return message.show(error);
     grid.set(target.x, target.y, target.z, tool.block);
+    game.buy(tool.block);
   } else if (button === 2) {
     // Right-click: delete.
-    const error = checkDelete(grid, p.cell, enemy.cells());
+    const error = checkDelete(grid, p.cell, enemyCells());
     if (error) return message.show(error);
+    game.refund(grid.get(p.cell.x, p.cell.y, p.cell.z)); // read the block BEFORE it's gone
     grid.set(p.cell.x, p.cell.y, p.cell.z, Block.Air);
   } else {
     return;
   }
 
   refreshWorld(); // the data changed, so redraw everything that depends on it
+  showHud();
 });
 
 // Remember where the mouse is. The ghost is updated every frame (below),
@@ -123,7 +155,7 @@ function updateGhost(): void {
   const p = pointer && picker.pick(pointer.x, pointer.y);
   if (!p) return ghost.hide();
   const target = placeTarget(p);
-  ghost.show(target, checkPlace(grid, target, tool.block, enemy.cells()) === null);
+  ghost.show(target, placeProblem(target) === null);
 }
 
 // --- Game loop ---------------------------------------------------------
@@ -133,27 +165,48 @@ function updateGhost(): void {
 
 function update(dt: number): void {
   markers.base.rotation.y += 1.0 * dt; // 1 radian per second, at any frame rate
-  updateGhost();
   message.update(dt);
   pathView.update(dt);
 
-  // Logic first: the enemy moves...
-  enemy.update(dt, grid, field);
+  // Game over: skip all the game logic below. The scene is still drawn every
+  // frame (see frame()), so the board stays on screen, frozen.
+  if (game.over) return ghost.hide();
+  updateGhost();
 
-  // ...then the towers aim at where it is NOW, count down, and fire (damage).
-  const enemies = [enemy];
+  // Spawn when the waves say so. `enemies.length` is how many are alive: the
+  // waves wait for 0 before starting the next break (or declaring the win).
+  // MAX_ENEMIES is only a safety cap for the renderer; waves stay well below it.
+  if (game.waves.update(dt, enemies.length) && enemies.length < MAX_ENEMIES) {
+    enemies.push(new Enemy(SPAWN));
+  }
+
+  // Logic first: the enemies move...
+  for (const enemy of enemies) enemy.update(dt, grid, field);
+
+  // ...then the towers aim at where they are NOW, count down, and fire (damage).
   for (const tower of towers.values()) {
     tower.aim(enemies, grid);
     tower.update(dt);
   }
 
-  // Draw the lines before the respawn, so the killing shot still flashes
+  // Draw the lines before removing anyone, so the killing shot still flashes
   // at the spot where the enemy died.
   targetLines.sync(towers.values());
 
-  // Reached the base or killed: a new one starts at the spawn.
-  if (enemy.arrived || enemy.dead) enemy = new Enemy(SPAWN);
-  enemyView.sync(enemy); // then copy the result to the screen
+  // Remove the ones that reached the base or were killed. Done AFTER the loops
+  // above, in one pass: removing items from an array while looping over it
+  // shifts the indexes and skips the next item.
+  // Settle up before they're removed: reaching the base costs a life, a kill pays.
+  for (const enemy of enemies) {
+    if (enemy.arrived) game.loseLife();
+    if (enemy.dead) game.enemyKilled();
+  }
+  showHud();
+  if (game.lost) message.show('Game over! Reload the page to play again.', Infinity);
+  else if (game.won) message.show('You win! Every wave cleared. Reload to play again.', Infinity);
+
+  enemies = enemies.filter((e) => !e.arrived && !e.dead);
+  enemyView.sync(enemies); // then copy the result to the screen
 }
 
 let last = performance.now();
