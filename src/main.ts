@@ -143,7 +143,12 @@ function update(dt: number): void {
 
   // Towers aim AFTER the enemy has moved, so they aim at where it is this frame.
   const enemies = [enemy];
-  for (const tower of towers.values()) tower.aim(enemies, grid);
+  // Then each one counts down its cooldown and fires if it can.
+  // (3c will use the `true` it returns to deal damage.)
+  for (const tower of towers.values()) {
+    tower.aim(enemies, grid);
+    tower.update(dt);
+  }
   targetLines.sync(towers.values());
 }
 

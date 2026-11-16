@@ -1,6 +1,6 @@
 // Towers as plain data plus rules (no Three.js), like enemy.ts.
 // The grid says WHERE the towers are; a Tower object holds what the grid
-// can't: who it's aiming at (and later its cooldown).
+// can't: who it's aiming at and its cooldown.
 
 import type { Cell } from './config';
 import { Block, type Grid } from './grid';
@@ -8,12 +8,15 @@ import { ENEMY_CENTER_Y, type Enemy } from './enemy';
 import { hasLineOfSight } from './sight';
 
 export const RANGE = 3; // in cells, from the tower's center to the enemy's position
+export const FIRE_INTERVAL = 0.5; // seconds between shots
 
 const pos: Cell = { x: 0, y: 0, z: 0 }; // reused scratch object, so aim() allocates nothing
 
 export class Tower {
   readonly cell: Cell;
   target: Enemy | null = null;
+  cooldown = 0; // seconds until it may fire again; 0 = ready
+  sinceShot = Infinity; // seconds since the last shot (Infinity = never shot)
 
   constructor(cell: Cell) {
     this.cell = cell;
@@ -46,6 +49,27 @@ export class Tower {
 
     this.target = best;
   }
+
+  // Count the cooldown down; fire if it's done AND there's a target.
+  // Returns true on the frame it fires. Call it after aim().
+  //
+  // `+=` instead of `=` keeps the leftover, like the enemy's t: if the timer
+  // hit -0.01, the next shot comes 0.01 s sooner, so the fire rate stays the
+  // same at any frame rate.
+  // With no target we hold the timer at 0 (ready). Otherwise it would keep
+  // going negative and the tower would fire a burst of "saved up" shots.
+  update(dt: number): boolean {
+    this.sinceShot += dt;
+    this.cooldown -= dt;
+    if (this.cooldown > 0) return false;
+    if (!this.target) {
+      this.cooldown = 0;
+      return false;
+    }
+    this.cooldown += FIRE_INTERVAL;
+    this.sinceShot = 0;
+    return true;
+  }
 }
 
 // Towers keyed by their grid index (the same number grid.index() gives).
@@ -54,7 +78,7 @@ export type Towers = Map<number, Tower>;
 // Rebuild the towers from the grid. Call it whenever the grid changes.
 //
 // The grid is the source of truth for WHERE towers are, but a Tower object
-// has state of its own (its target, soon its cooldown). So for a cell that
+// has state of its own (its target, its cooldown). So for a cell that
 // was already a tower we keep the OLD object instead of making a new one;
 // otherwise every edit would reset every tower's cooldown.
 // A deleted tower isn't in the grid any more, so it simply isn't copied over.
