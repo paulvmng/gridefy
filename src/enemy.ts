@@ -41,8 +41,8 @@ export class Enemy {
     const { x, y, z } = this.from;
     const next = nextCell(grid, field, grid.index(x, y, z));
     if (next === -1) {
-      // At the base. (Known gap: -1 can also mean "this cell became
-      // unreachable". See ideas.md; we'll handle that later.)
+      // At the base. edit.ts never lets the player cut off an enemy's cells,
+      // so -1 can't mean "trapped" any more.
       this.arrived = true;
       this.t = 0;
       return;
@@ -53,6 +53,12 @@ export class Enemy {
     //    0.05 counts toward the next step. With t = 0 it would be lost, and
     //    the enemy would walk slower on screens with bigger frames.
     this.t -= 1;
+  }
+
+  // The cells this enemy is touching right now. Edits must keep both of
+  // them connected to the base (see edit.ts).
+  cells(): Cell[] {
+    return [this.from, this.to];
   }
 
   // Where to draw the enemy right now: the lerp from `from` to `to` at `t`.

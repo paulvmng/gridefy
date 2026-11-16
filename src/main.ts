@@ -74,12 +74,12 @@ onClick(renderer.domElement, (button, x, y) => {
   if (button === 0) {
     // Left-click: place.
     const target = placeTarget(p);
-    const error = checkPlace(grid, target);
+    const error = checkPlace(grid, target, enemy.cells());
     if (error) return message.show(error);
     grid.set(target.x, target.y, target.z, Block.Placed);
   } else if (button === 2) {
     // Right-click: delete.
-    const error = checkDelete(grid, p.cell);
+    const error = checkDelete(grid, p.cell, enemy.cells());
     if (error) return message.show(error);
     grid.set(p.cell.x, p.cell.y, p.cell.z, Block.Air);
   } else {
@@ -99,7 +99,7 @@ function updateGhost(): void {
   const p = pointer && picker.pick(pointer.x, pointer.y);
   if (!p) return ghost.hide();
   const target = placeTarget(p);
-  ghost.show(target, checkPlace(grid, target) === null);
+  ghost.show(target, checkPlace(grid, target, enemy.cells()) === null);
 }
 
 // --- Game loop ---------------------------------------------------------
