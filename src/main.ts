@@ -1,7 +1,7 @@
 import './style.css';
 import { SPAWN, type Cell } from './config';
 import { Enemy } from './enemy';
-import { EnemyView } from './render/enemyView';
+import { EnemyView, MAX_ENEMIES } from './render/enemyView';
 import { Block, createWorld } from './grid';
 import { checkDelete, checkPlace } from './edit';
 import { createScene } from './render/scene';
@@ -78,10 +78,18 @@ const ghost = new Ghost();
 scene.add(ghost.mesh);
 const message = new Message(document.getElementById('msg')!);
 
-// One enemy for now. When it reaches the base, a new one starts at the spawn.
-let enemy = new Enemy(SPAWN);
+// Every enemy on the field. A new one spawns every SPAWN_INTERVAL seconds;
+// enemies that reach the base or die are removed (see update()).
+let enemies: Enemy[] = [];
+const SPAWN_INTERVAL = 2; // seconds
+// Same "count up and keep the leftover" timer as a tower's cooldown.
+// Starting full means the first enemy spawns on the first frame.
+let spawnTimer = SPAWN_INTERVAL;
 const enemyView = new EnemyView();
 scene.add(enemyView.mesh);
+
+// Every cell any enemy is touching. Edits must keep ALL of them connected to the base.
+const enemyCells = () => enemies.flatMap((e) => e.cells());
 
 // --- Editing -----------------------------------------------------------
 
@@ -98,12 +106,12 @@ onClick(renderer.domElement, (button, x, y) => {
   if (button === 0) {
     // Left-click: place.
     const target = placeTarget(p);
-    const error = checkPlace(grid, target, tool.block, enemy.cells());
+    const error = checkPlace(grid, target, tool.block, enemyCells());
     if (error) return message.show(error);
     grid.set(target.x, target.y, target.z, tool.block);
   } else if (button === 2) {
     // Right-click: delete.
-    const error = checkDelete(grid, p.cell, enemy.cells());
+    const error = checkDelete(grid, p.cell, enemyCells());
     if (error) return message.show(error);
     grid.set(p.cell.x, p.cell.y, p.cell.z, Block.Air);
   } else {
@@ -123,7 +131,7 @@ function updateGhost(): void {
   const p = pointer && picker.pick(pointer.x, pointer.y);
   if (!p) return ghost.hide();
   const target = placeTarget(p);
-  ghost.show(target, checkPlace(grid, target, tool.block, enemy.cells()) === null);
+  ghost.show(target, checkPlace(grid, target, tool.block, enemyCells()) === null);
 }
 
 // --- Game loop ---------------------------------------------------------
@@ -137,23 +145,32 @@ function update(dt: number): void {
   message.update(dt);
   pathView.update(dt);
 
-  // Logic first: the enemy moves...
-  enemy.update(dt, grid, field);
+  // Spawn. If the field is full, skip this spawn instead of saving it up,
+  // so there's no burst of enemies later.
+  spawnTimer += dt;
+  if (spawnTimer >= SPAWN_INTERVAL) {
+    spawnTimer -= SPAWN_INTERVAL;
+    if (enemies.length < MAX_ENEMIES) enemies.push(new Enemy(SPAWN));
+  }
 
-  // ...then the towers aim at where it is NOW, count down, and fire (damage).
-  const enemies = [enemy];
+  // Logic first: the enemies move...
+  for (const enemy of enemies) enemy.update(dt, grid, field);
+
+  // ...then the towers aim at where they are NOW, count down, and fire (damage).
   for (const tower of towers.values()) {
     tower.aim(enemies, grid);
     tower.update(dt);
   }
 
-  // Draw the lines before the respawn, so the killing shot still flashes
+  // Draw the lines before removing anyone, so the killing shot still flashes
   // at the spot where the enemy died.
   targetLines.sync(towers.values());
 
-  // Reached the base or killed: a new one starts at the spawn.
-  if (enemy.arrived || enemy.dead) enemy = new Enemy(SPAWN);
-  enemyView.sync(enemy); // then copy the result to the screen
+  // Remove the ones that reached the base or were killed. Done AFTER the loops
+  // above, in one pass: removing items from an array while looping over it
+  // shifts the indexes and skips the next item.
+  enemies = enemies.filter((e) => !e.arrived && !e.dead);
+  enemyView.sync(enemies); // then copy the result to the screen
 }
 
 let last = performance.now();
