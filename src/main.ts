@@ -100,6 +100,7 @@ function update(dt: number): void {
   markers.base.rotation.y += 1.0 * dt; // 1 radian per second, at any frame rate
   updateGhost();
   message.update(dt);
+  pathView.update(dt);
 }
 
 let last = performance.now();

@@ -13,9 +13,13 @@ import type { Grid } from '../grid';
 
 const FORWARD = new THREE.Vector3(0, 0, 1);
 const NO_SCALE = new THREE.Vector3(1, 1, 1);
+const SPEED = 1.5; // steps per second
 
 export class PathView {
   readonly mesh: THREE.InstancedMesh;
+  private cells: Cell[] = [];
+  // 0..1: how far every arrow is along its own step.
+  private phase = 0;
   // Reused every sync, so nothing new is created per arrow.
   private readonly matrix = new THREE.Matrix4();
   private readonly position = new THREE.Vector3();
@@ -36,8 +40,22 @@ export class PathView {
     this.mesh.count = 0;
   }
 
+  // Called when the path changes. Remember it; update() redraws it every frame.
   sync(path: Cell[] | null): void {
-    const cells = path ?? [];
+    this.cells = path ?? [];
+    this.draw();
+  }
+
+  // Called every frame. Advance the phase and wrap it back into 0..1,
+  // so the arrows loop forever.
+  update(dt: number): void {
+    this.phase = (this.phase + SPEED * dt) % 1;
+    this.draw();
+  }
+
+  private draw(): void {
+    const cells = this.cells;
+    const t = this.phase;
     let i = 0;
 
     // One arrow per step: from cells[k] toward cells[k + 1].
@@ -50,8 +68,13 @@ export class PathView {
       this.direction.set(to.x - from.x, to.y - from.y, to.z - from.z).normalize();
       this.rotation.setFromUnitVectors(FORWARD, this.direction);
 
-      // Just above the floor of the cell (the floor is at y - 0.5).
-      this.position.set(from.x, from.y - 0.3, from.z);
+      // Lerp: part of the way from `from` to `to` (t = 0 → from, t = 1 → to).
+      // The - 0.3 keeps it just above the floor of the cell (the floor is at y - 0.5).
+      this.position.set(
+        from.x + (to.x - from.x) * t,
+        from.y + (to.y - from.y) * t - 0.3,
+        from.z + (to.z - from.z) * t,
+      );
 
       this.matrix.compose(this.position, this.rotation, NO_SCALE);
       this.mesh.setMatrixAt(i++, this.matrix);
