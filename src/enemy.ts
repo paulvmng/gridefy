@@ -11,6 +11,13 @@ import { nextCell } from './pathfinding';
 
 const SPEED = 1.5; // steps per second
 
+// Hop height on steps up and down. Its minimum depends on the box size in
+// enemyView.ts (0.6, so half = 0.3): going up, the box's front face reaches
+// the block's edge when t² = 0.5 - 0.3, so t ≈ 0.447, and by then its bottom
+// must be a full block up. That gives HOP ≥ 1 / (4 * 0.447) ≈ 0.56.
+// A bigger box needs a bigger hop.
+const HOP = 0.6;
+
 export class Enemy {
   from: Cell;
   to: Cell;
@@ -61,14 +68,30 @@ export class Enemy {
     return [this.from, this.to];
   }
 
-  // Where to draw the enemy right now: the lerp from `from` to `to` at `t`.
+  // Where to draw the enemy right now, between `from` and `to` at `t`.
   // Writes into `out` instead of returning a new object, so nothing is
   // created per frame.
+  //
+  // On level ground it's a straight lerp. On a step up or down, a straight
+  // lerp would cut through the corner of a block, so horizontal and vertical
+  // motion each get their own curve (same t, different shape):
+  //   - vertical: the lerp plus an arc, HOP * 4t(1-t) (0 at both ends, so it
+  //     always lands exactly on `to`)
+  //   - horizontal: up = t² (rise first, then go forward);
+  //     down = 1-(1-t)² (go forward first, then drop). Down is up played backwards.
   position(out: Cell): Cell {
     const { from, to, t } = this;
-    out.x = from.x + (to.x - from.x) * t;
-    out.y = from.y + (to.y - from.y) * t;
-    out.z = from.z + (to.z - from.z) * t;
+    const dy = to.y - from.y;
+
+    let h = t; // horizontal progress
+    let arc = 0; // extra height on top of the lerp
+    if (dy > 0) h = t * t;
+    if (dy < 0) h = 1 - (1 - t) * (1 - t);
+    if (dy !== 0) arc = HOP * 4 * t * (1 - t);
+
+    out.x = from.x + (to.x - from.x) * h;
+    out.y = from.y + dy * t + arc;
+    out.z = from.z + (to.z - from.z) * h;
     return out;
   }
 }
