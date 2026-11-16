@@ -14,6 +14,8 @@ import { Heatmap } from './render/heatmap';
 import { computeFlowField, findPath } from './pathfinding';
 import { onClick } from './input/clicks';
 import { Message } from './ui/message';
+import { findTowers, type Tower } from './tower';
+import { TargetLines } from './render/targetLines';
 
 // --- Setup -------------------------------------------------------------
 const grid = createWorld();
@@ -29,11 +31,16 @@ const pathInfo = document.getElementById('pathinfo')!;
 // The current flow field. Kept here (not just inside refreshWorld) because
 // the enemy reads it every frame in update().
 let field: Int32Array;
+// Same idea for the towers: rebuilt from the grid on every change, read every frame.
+let towers: Tower[] = [];
+const targetLines = new TargetLines(grid);
+scene.add(targetLines.mesh);
 
 // Call whenever the grid changes: redraw the boxes, recompute the flow field,
 // then redraw the path and the heatmap from it.
 function refreshWorld(): void {
   blocks.sync(grid);
+  towers = findTowers(grid);
   field = computeFlowField(grid);
   const path = findPath(grid, field);
   pathView.sync(path);
@@ -132,6 +139,11 @@ function update(dt: number): void {
   enemy.update(dt, grid, field); // logic first...
   if (enemy.arrived) enemy = new Enemy(SPAWN);
   enemyView.sync(enemy); // ...then copy the result to the screen
+
+  // Towers aim AFTER the enemy has moved, so they aim at where it is this frame.
+  const enemies = [enemy];
+  for (const tower of towers) tower.aim(enemies);
+  targetLines.sync(towers);
 }
 
 let last = performance.now();
