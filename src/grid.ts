@@ -2,7 +2,7 @@
 // solid. Keeping it separate from rendering means we can test it, run
 // pathfinding on it, or (later) validate it on a server.
 
-import { GRID_HEIGHT, GRID_LENGTH, GRID_WIDTH } from './config';
+import { GRID_HEIGHT, GRID_LENGTH, GRID_WIDTH, type Cell } from './config';
 
 // What can be in a cell. A plain object instead of a TS `enum` works better with Vite.
 export const Block = {
@@ -30,6 +30,16 @@ export class Grid {
   // Layout: one horizontal layer (width x length) after another, going up.
   index(x: number, y: number, z: number): number {
     return x + z * this.width + y * this.width * this.length;
+  }
+
+  // The reverse of index(): flat position -> (x, y, z).
+  coords(i: number): Cell {
+    const layer = this.width * this.length; // cells per horizontal layer
+    return {
+      x: i % this.width,
+      y: Math.floor(i / layer),
+      z: Math.floor((i % layer) / this.width),
+    };
   }
 
   inBounds(x: number, y: number, z: number): boolean {
