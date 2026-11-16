@@ -1,5 +1,7 @@
 import './style.css';
-import type { Cell } from './config';
+import { SPAWN, type Cell } from './config';
+import { Enemy } from './enemy';
+import { EnemyView } from './render/enemyView';
 import { Block, createWorld } from './grid';
 import { checkDelete, checkPlace } from './edit';
 import { createScene } from './render/scene';
@@ -24,15 +26,21 @@ scene.add(blocks.mesh, pathView.mesh, heatmap.mesh);
 
 const pathInfo = document.getElementById('pathinfo')!;
 
+// The current flow field. Kept here (not just inside refreshWorld) because
+// the enemy reads it every frame in update().
+let field: Int32Array;
+
 // Call whenever the grid changes: redraw the boxes, recompute the flow field,
 // then redraw the path and the heatmap from it.
 function refreshWorld(): void {
   blocks.sync(grid);
-  const field = computeFlowField(grid);
+  field = computeFlowField(grid);
   const path = findPath(grid, field);
   pathView.sync(path);
   heatmap.sync(grid, field);
-  pathInfo.textContent = path ? `${path.length - 1} steps` : 'BLOCKED';
+  // Steps = how many moves. Cost = what they add up to (climbs count extra).
+  const cost = field[grid.index(SPAWN.x, SPAWN.y, SPAWN.z)];
+  pathInfo.textContent = path ? `${path.length - 1} steps, cost ${cost}` : 'BLOCKED';
 }
 refreshWorld();
 
@@ -47,6 +55,11 @@ const picker = new Picker(camera, renderer.domElement, blocks.mesh);
 const ghost = new Ghost();
 scene.add(ghost.mesh);
 const message = new Message(document.getElementById('msg')!);
+
+// One enemy for now. When it reaches the base, a new one starts at the spawn.
+let enemy = new Enemy(SPAWN);
+const enemyView = new EnemyView();
+scene.add(enemyView.mesh);
 
 // --- Editing -----------------------------------------------------------
 
@@ -63,12 +76,12 @@ onClick(renderer.domElement, (button, x, y) => {
   if (button === 0) {
     // Left-click: place.
     const target = placeTarget(p);
-    const error = checkPlace(grid, target);
+    const error = checkPlace(grid, target, enemy.cells());
     if (error) return message.show(error);
     grid.set(target.x, target.y, target.z, Block.Placed);
   } else if (button === 2) {
     // Right-click: delete.
-    const error = checkDelete(grid, p.cell);
+    const error = checkDelete(grid, p.cell, enemy.cells());
     if (error) return message.show(error);
     grid.set(p.cell.x, p.cell.y, p.cell.z, Block.Air);
   } else {
@@ -88,7 +101,7 @@ function updateGhost(): void {
   const p = pointer && picker.pick(pointer.x, pointer.y);
   if (!p) return ghost.hide();
   const target = placeTarget(p);
-  ghost.show(target, checkPlace(grid, target) === null);
+  ghost.show(target, checkPlace(grid, target, enemy.cells()) === null);
 }
 
 // --- Game loop ---------------------------------------------------------
@@ -100,6 +113,11 @@ function update(dt: number): void {
   markers.base.rotation.y += 1.0 * dt; // 1 radian per second, at any frame rate
   updateGhost();
   message.update(dt);
+  pathView.update(dt);
+
+  enemy.update(dt, grid, field); // logic first...
+  if (enemy.arrived) enemy = new Enemy(SPAWN);
+  enemyView.sync(enemy); // ...then copy the result to the screen
 }
 
 let last = performance.now();
