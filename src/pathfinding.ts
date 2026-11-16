@@ -2,7 +2,7 @@
 // every cell from the base? No Three.js here, only the grid.
 
 import { BASE, SPAWN, type Cell } from './config';
-import type { Grid } from './grid';
+import { Block, type Grid } from './grid';
 
 export const UNREACHABLE = -1;
 
@@ -14,9 +14,13 @@ const DIRECTIONS = [
   [0, -1],
 ] as const;
 
-// An enemy can stand in a cell if the cell is empty and the cell below it is solid.
+// An enemy can stand in a cell if the cell is empty and the cell below it is
+// solid ground. Towers are solid but NOT ground: enemies can't walk on top of
+// them, so a tower always blocks (no climbing over a row of towers).
 export function canStand(grid: Grid, x: number, y: number, z: number): boolean {
-  return grid.inBounds(x, y, z) && !grid.isSolid(x, y, z) && grid.isSolid(x, y - 1, z);
+  if (!grid.inBounds(x, y, z) || grid.isSolid(x, y, z)) return false;
+  const below = grid.get(x, y - 1, z);
+  return below !== Block.Air && below !== Block.Tower;
 }
 
 // Calls visit() for every cell an enemy standing at (x, y, z) can move to in one step.

@@ -44,8 +44,22 @@ function refreshWorld(): void {
 }
 refreshWorld();
 
+// The build tool: which block a left-click places. 1 = wall, 2 = tower.
+const TOOLS = [
+  { key: 'Digit1', block: Block.Placed, name: 'wall' },
+  { key: 'Digit2', block: Block.Tower, name: 'tower' },
+];
+let tool = TOOLS[0];
+const toolInfo = document.getElementById('tool')!;
+toolInfo.textContent = tool.name;
+
 window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyF') heatmap.toggle();
+  const picked = TOOLS.find((t) => t.key === e.code);
+  if (picked) {
+    tool = picked;
+    toolInfo.textContent = tool.name;
+  }
 });
 
 const markers = createMarkers();
@@ -76,9 +90,9 @@ onClick(renderer.domElement, (button, x, y) => {
   if (button === 0) {
     // Left-click: place.
     const target = placeTarget(p);
-    const error = checkPlace(grid, target, enemy.cells());
+    const error = checkPlace(grid, target, tool.block, enemy.cells());
     if (error) return message.show(error);
-    grid.set(target.x, target.y, target.z, Block.Placed);
+    grid.set(target.x, target.y, target.z, tool.block);
   } else if (button === 2) {
     // Right-click: delete.
     const error = checkDelete(grid, p.cell, enemy.cells());
@@ -101,7 +115,7 @@ function updateGhost(): void {
   const p = pointer && picker.pick(pointer.x, pointer.y);
   if (!p) return ghost.hide();
   const target = placeTarget(p);
-  ghost.show(target, checkPlace(grid, target, enemy.cells()) === null);
+  ghost.show(target, checkPlace(grid, target, tool.block, enemy.cells()) === null);
 }
 
 // --- Game loop ---------------------------------------------------------
