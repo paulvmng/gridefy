@@ -7,6 +7,9 @@ import { BlockRenderer } from './render/blocks';
 import { createBoundsOutline, createMarkers } from './render/markers';
 import { Picker, type Pick } from './render/picker';
 import { Ghost } from './render/ghost';
+import { PathView } from './render/pathView';
+import { Heatmap } from './render/heatmap';
+import { computeFlowField, findPath } from './pathfinding';
 import { onClick } from './input/clicks';
 import { Message } from './ui/message';
 
@@ -15,8 +18,27 @@ const grid = createWorld();
 const { renderer, scene, camera, controls, clampPan } = createScene(document.getElementById('app')!);
 
 const blocks = new BlockRenderer(grid);
-blocks.sync(grid);
-scene.add(blocks.mesh);
+const pathView = new PathView(grid);
+const heatmap = new Heatmap(grid);
+scene.add(blocks.mesh, pathView.mesh, heatmap.mesh);
+
+const pathInfo = document.getElementById('pathinfo')!;
+
+// Call whenever the grid changes: redraw the boxes, recompute the flow field,
+// then redraw the path and the heatmap from it.
+function refreshWorld(): void {
+  blocks.sync(grid);
+  const field = computeFlowField(grid);
+  const path = findPath(grid, field);
+  pathView.sync(path);
+  heatmap.sync(grid, field);
+  pathInfo.textContent = path ? `${path.length - 1} steps` : 'BLOCKED';
+}
+refreshWorld();
+
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyF') heatmap.toggle();
+});
 
 const markers = createMarkers();
 scene.add(markers.spawn, markers.base, createBoundsOutline(grid));
@@ -53,7 +75,7 @@ onClick(renderer.domElement, (button, x, y) => {
     return;
   }
 
-  blocks.sync(grid); // the data changed, so redraw the boxes
+  refreshWorld(); // the data changed, so redraw everything that depends on it
 });
 
 // Remember where the mouse is. The ghost is updated every frame (below),
