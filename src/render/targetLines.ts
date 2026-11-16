@@ -27,7 +27,7 @@ export class TargetLines {
     this.mesh.frustumCulled = false; // the points move every frame, so skip the bounding check
   }
 
-  sync(towers: Tower[]): void {
+  sync(towers: Iterable<Tower>): void {
     let n = 0; // numbers written so far
     for (const tower of towers) {
       if (!tower.target) continue;
