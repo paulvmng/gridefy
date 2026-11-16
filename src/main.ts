@@ -1,5 +1,7 @@
 import './style.css';
-import type { Cell } from './config';
+import { SPAWN, type Cell } from './config';
+import { Enemy } from './enemy';
+import { EnemyView } from './render/enemyView';
 import { Block, createWorld } from './grid';
 import { checkDelete, checkPlace } from './edit';
 import { createScene } from './render/scene';
@@ -24,11 +26,15 @@ scene.add(blocks.mesh, pathView.mesh, heatmap.mesh);
 
 const pathInfo = document.getElementById('pathinfo')!;
 
+// The current flow field. Kept here (not just inside refreshWorld) because
+// the enemy reads it every frame in update().
+let field: Int32Array;
+
 // Call whenever the grid changes: redraw the boxes, recompute the flow field,
 // then redraw the path and the heatmap from it.
 function refreshWorld(): void {
   blocks.sync(grid);
-  const field = computeFlowField(grid);
+  field = computeFlowField(grid);
   const path = findPath(grid, field);
   pathView.sync(path);
   heatmap.sync(grid, field);
@@ -47,6 +53,11 @@ const picker = new Picker(camera, renderer.domElement, blocks.mesh);
 const ghost = new Ghost();
 scene.add(ghost.mesh);
 const message = new Message(document.getElementById('msg')!);
+
+// One enemy for now. When it reaches the base, a new one starts at the spawn.
+let enemy = new Enemy(SPAWN);
+const enemyView = new EnemyView();
+scene.add(enemyView.mesh);
 
 // --- Editing -----------------------------------------------------------
 
@@ -101,6 +112,10 @@ function update(dt: number): void {
   updateGhost();
   message.update(dt);
   pathView.update(dt);
+
+  enemy.update(dt, grid, field); // logic first...
+  if (enemy.arrived) enemy = new Enemy(SPAWN);
+  enemyView.sync(enemy); // ...then copy the result to the screen
 }
 
 let last = performance.now();

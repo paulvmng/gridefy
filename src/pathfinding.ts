@@ -89,8 +89,27 @@ export function computeFlowField(grid: Grid): Int32Array {
   return dist;
 }
 
-// Follow the field "downhill" from the spawn: at each step, move to the
-// neighbor with the smallest distance, until we reach 0 (the base).
+// THE DOWNHILL RULE: from cell `current` (a flat index), the neighbor with the
+// smallest distance to the base. Returns -1 if there is none: we're at the base
+// (distance 0), or this cell can't reach the base at all.
+// findPath() and enemies both use this, so they always agree on the route.
+export function nextCell(grid: Grid, field: Int32Array, current: number): number {
+  let best = -1;
+  let bestDist = field[current];
+  const { x, y, z } = grid.coords(current);
+
+  forEachMove(grid, x, y, z, (nx, ny, nz) => {
+    const n = grid.index(nx, ny, nz);
+    if (field[n] !== UNREACHABLE && field[n] < bestDist) {
+      best = n;
+      bestDist = field[n];
+    }
+  });
+
+  return best;
+}
+
+// Follow the field downhill from the spawn until we reach 0 (the base).
 // Returns null if the spawn can't reach the base.
 export function findPath(grid: Grid, field: Int32Array): Cell[] | null {
   let current = grid.index(SPAWN.x, SPAWN.y, SPAWN.z);
@@ -99,20 +118,9 @@ export function findPath(grid: Grid, field: Int32Array): Cell[] | null {
   const path: Cell[] = [grid.coords(current)];
 
   while (field[current] > 0) {
-    let best = -1;
-    let bestDist = field[current];
-    const { x, y, z } = grid.coords(current);
-
-    forEachMove(grid, x, y, z, (nx, ny, nz) => {
-      const n = grid.index(nx, ny, nz);
-      if (field[n] !== UNREACHABLE && field[n] < bestDist) {
-        best = n;
-        bestDist = field[n];
-      }
-    });
-
-    if (best === -1) break; // can't happen with a valid field, but never loop forever
-    current = best;
+    const next = nextCell(grid, field, current);
+    if (next === -1) break; // can't happen with a valid field, but never loop forever
+    current = next;
     path.push(grid.coords(current));
   }
 
