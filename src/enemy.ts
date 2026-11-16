@@ -24,11 +24,14 @@ export const ENEMY_CENTER_Y = -0.5 + ENEMY_SIZE / 2;
 // A bigger box needs a bigger hop.
 const HOP = 0.6;
 
+export const MAX_HP = 5;
+
 export class Enemy {
   from: Cell;
   to: Cell;
   t: number;
   arrived = false; // true once it has reached the base
+  hp = MAX_HP;
 
   constructor(start: Cell) {
     // Start "already arrived" at the start cell (from = to, t = 1),
@@ -36,6 +39,15 @@ export class Enemy {
     this.from = start;
     this.to = start;
     this.t = 1;
+  }
+
+  get dead(): boolean {
+    return this.hp <= 0;
+  }
+
+  // Take damage. HP never goes below 0, so the view can use hp / MAX_HP directly.
+  hit(damage: number): void {
+    this.hp = Math.max(this.hp - damage, 0);
   }
 
   // Called every frame. `field` is the CURRENT flow field, so if the player

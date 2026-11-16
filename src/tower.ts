@@ -9,6 +9,7 @@ import { hasLineOfSight } from './sight';
 
 export const RANGE = 3; // in cells, from the tower's center to the enemy's position
 export const FIRE_INTERVAL = 0.5; // seconds between shots
+export const DAMAGE = 1; // HP per shot
 
 const pos: Cell = { x: 0, y: 0, z: 0 }; // reused scratch object, so aim() allocates nothing
 
@@ -35,6 +36,8 @@ export class Tower {
     let bestD2 = RANGE * RANGE;
 
     for (const enemy of enemies) {
+      // Another tower may have killed it earlier this same frame.
+      if (enemy.dead) continue;
       enemy.position(pos);
       pos.y += ENEMY_CENTER_Y; // aim at the middle of its body
       const dx = pos.x - this.cell.x;
@@ -51,7 +54,8 @@ export class Tower {
   }
 
   // Count the cooldown down; fire if it's done AND there's a target.
-  // Returns true on the frame it fires. Call it after aim().
+  // Firing damages the target. Returns true on the frame it fires.
+  // Call it after aim().
   //
   // `+=` instead of `=` keeps the leftover, like the enemy's t: if the timer
   // hit -0.01, the next shot comes 0.01 s sooner, so the fire rate stays the
@@ -68,6 +72,7 @@ export class Tower {
     }
     this.cooldown += FIRE_INTERVAL;
     this.sinceShot = 0;
+    this.target.hit(DAMAGE);
     return true;
   }
 }

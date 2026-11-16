@@ -137,19 +137,23 @@ function update(dt: number): void {
   message.update(dt);
   pathView.update(dt);
 
-  enemy.update(dt, grid, field); // logic first...
-  if (enemy.arrived) enemy = new Enemy(SPAWN);
-  enemyView.sync(enemy); // ...then copy the result to the screen
+  // Logic first: the enemy moves...
+  enemy.update(dt, grid, field);
 
-  // Towers aim AFTER the enemy has moved, so they aim at where it is this frame.
+  // ...then the towers aim at where it is NOW, count down, and fire (damage).
   const enemies = [enemy];
-  // Then each one counts down its cooldown and fires if it can.
-  // (3c will use the `true` it returns to deal damage.)
   for (const tower of towers.values()) {
     tower.aim(enemies, grid);
     tower.update(dt);
   }
+
+  // Draw the lines before the respawn, so the killing shot still flashes
+  // at the spot where the enemy died.
   targetLines.sync(towers.values());
+
+  // Reached the base or killed: a new one starts at the spawn.
+  if (enemy.arrived || enemy.dead) enemy = new Enemy(SPAWN);
+  enemyView.sync(enemy); // then copy the result to the screen
 }
 
 let last = performance.now();
