@@ -11,8 +11,14 @@ import { nextCell } from './pathfinding';
 
 const SPEED = 1.5; // steps per second
 
-// Hop height on steps up and down. Its minimum depends on the box size in
-// enemyView.ts (0.6, so half = 0.3): going up, the box's front face reaches
+// The enemy's body is a box this big, resting on the cell's floor (y - 0.5).
+// Its middle is ENEMY_CENTER_Y from the cell's center. That's part of the
+// game rules (towers aim at it), so it lives here, not in the renderer.
+export const ENEMY_SIZE = 0.6;
+export const ENEMY_CENTER_Y = -0.5 + ENEMY_SIZE / 2;
+
+// Hop height on steps up and down. Its minimum depends on ENEMY_SIZE
+// (0.6, so half = 0.3): going up, the box's front face reaches
 // the block's edge when t² = 0.5 - 0.3, so t ≈ 0.447, and by then its bottom
 // must be a full block up. That gives HOP ≥ 1 / (4 * 0.447) ≈ 0.56.
 // A bigger box needs a bigger hop.

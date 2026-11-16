@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import type { Cell } from '../config';
 import type { Grid } from '../grid';
 import type { Tower } from '../tower';
-import { ENEMY_CENTER_Y } from './enemyView';
+import { ENEMY_CENTER_Y } from '../enemy';
 
 export class TargetLines {
   readonly mesh: THREE.LineSegments;

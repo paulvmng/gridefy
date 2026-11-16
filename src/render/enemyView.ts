@@ -3,13 +3,7 @@
 
 import * as THREE from 'three';
 import type { Cell } from '../config';
-import type { Enemy } from '../enemy';
-
-const SIZE = 0.6;
-
-// The cell's floor is at y - 0.5, and the box sits on it, so the box's
-// middle is this far from the cell's center (used to aim at it).
-export const ENEMY_CENTER_Y = -0.5 + SIZE / 2;
+import { ENEMY_CENTER_Y, ENEMY_SIZE as SIZE, type Enemy } from '../enemy';
 
 export class EnemyView {
   readonly mesh: THREE.Mesh;

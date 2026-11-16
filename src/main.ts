@@ -142,7 +142,7 @@ function update(dt: number): void {
 
   // Towers aim AFTER the enemy has moved, so they aim at where it is this frame.
   const enemies = [enemy];
-  for (const tower of towers) tower.aim(enemies);
+  for (const tower of towers) tower.aim(enemies, grid);
   targetLines.sync(towers);
 }
 
