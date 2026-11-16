@@ -92,10 +92,15 @@ scene.add(enemyView.mesh);
 // Every cell any enemy is touching. Edits must keep ALL of them connected to the base.
 const enemyCells = () => enemies.flatMap((e) => e.cells());
 
-// The match: lives (later money and waves). The HUD just shows what's in it.
+// The match: lives and money (later waves). The HUD just shows what's in it.
 const game = new Game();
 const livesInfo = document.getElementById('lives')!;
-livesInfo.textContent = String(game.lives);
+const moneyInfo = document.getElementById('money')!;
+function showHud(): void {
+  livesInfo.textContent = String(game.lives);
+  moneyInfo.textContent = String(game.money);
+}
+showHud();
 
 // --- Editing -----------------------------------------------------------
 
@@ -103,6 +108,14 @@ livesInfo.textContent = String(game.lives);
 // the hit block's cell + the face direction.
 function placeTarget(p: Pick): Cell {
   return { x: p.cell.x + p.normal.x, y: p.cell.y + p.normal.y, z: p.cell.z + p.normal.z };
+}
+
+// Can the current tool be built at `target`? Two kinds of rules:
+// the match (money, in game.ts) and the world (edit.ts).
+// Money first: it's one comparison, while checkPlace runs a pathfinding pass.
+function placeProblem(target: Cell): string | null {
+  if (!game.canAfford(tool.block)) return 'Not enough money';
+  return checkPlace(grid, target, tool.block, enemyCells());
 }
 
 onClick(renderer.domElement, (button, x, y) => {
@@ -113,19 +126,22 @@ onClick(renderer.domElement, (button, x, y) => {
   if (button === 0) {
     // Left-click: place.
     const target = placeTarget(p);
-    const error = checkPlace(grid, target, tool.block, enemyCells());
+    const error = placeProblem(target);
     if (error) return message.show(error);
     grid.set(target.x, target.y, target.z, tool.block);
+    game.buy(tool.block);
   } else if (button === 2) {
     // Right-click: delete.
     const error = checkDelete(grid, p.cell, enemyCells());
     if (error) return message.show(error);
+    game.refund(grid.get(p.cell.x, p.cell.y, p.cell.z)); // read the block BEFORE it's gone
     grid.set(p.cell.x, p.cell.y, p.cell.z, Block.Air);
   } else {
     return;
   }
 
   refreshWorld(); // the data changed, so redraw everything that depends on it
+  showHud();
 });
 
 // Remember where the mouse is. The ghost is updated every frame (below),
@@ -138,7 +154,7 @@ function updateGhost(): void {
   const p = pointer && picker.pick(pointer.x, pointer.y);
   if (!p) return ghost.hide();
   const target = placeTarget(p);
-  ghost.show(target, checkPlace(grid, target, tool.block, enemyCells()) === null);
+  ghost.show(target, placeProblem(target) === null);
 }
 
 // --- Game loop ---------------------------------------------------------
@@ -180,11 +196,12 @@ function update(dt: number): void {
   // Remove the ones that reached the base or were killed. Done AFTER the loops
   // above, in one pass: removing items from an array while looping over it
   // shifts the indexes and skips the next item.
-  // Each enemy that reached the base costs a life (counted before they're removed).
+  // Settle up before they're removed: reaching the base costs a life, a kill pays.
   for (const enemy of enemies) {
     if (enemy.arrived) game.loseLife();
+    if (enemy.dead) game.enemyKilled();
   }
-  livesInfo.textContent = String(game.lives);
+  showHud();
   if (game.over) message.show('Game over! Reload the page to play again.', Infinity);
 
   enemies = enemies.filter((e) => !e.arrived && !e.dead);
