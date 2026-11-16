@@ -14,6 +14,8 @@ import { Heatmap } from './render/heatmap';
 import { computeFlowField, findPath } from './pathfinding';
 import { onClick } from './input/clicks';
 import { Message } from './ui/message';
+import { syncTowers, type Towers } from './tower';
+import { TargetLines } from './render/targetLines';
 
 // --- Setup -------------------------------------------------------------
 const grid = createWorld();
@@ -29,11 +31,17 @@ const pathInfo = document.getElementById('pathinfo')!;
 // The current flow field. Kept here (not just inside refreshWorld) because
 // the enemy reads it every frame in update().
 let field: Int32Array;
+// Same idea for the towers: synced with the grid on every change, read every frame.
+// Existing towers are reused, so their state survives edits (see syncTowers).
+let towers: Towers = new Map();
+const targetLines = new TargetLines(grid);
+scene.add(targetLines.mesh);
 
 // Call whenever the grid changes: redraw the boxes, recompute the flow field,
 // then redraw the path and the heatmap from it.
 function refreshWorld(): void {
   blocks.sync(grid);
+  towers = syncTowers(grid, towers);
   field = computeFlowField(grid);
   const path = findPath(grid, field);
   pathView.sync(path);
@@ -44,8 +52,22 @@ function refreshWorld(): void {
 }
 refreshWorld();
 
+// The build tool: which block a left-click places. 1 = wall, 2 = tower.
+const TOOLS = [
+  { key: 'Digit1', block: Block.Placed, name: 'wall' },
+  { key: 'Digit2', block: Block.Tower, name: 'tower' },
+];
+let tool = TOOLS[0];
+const toolInfo = document.getElementById('tool')!;
+toolInfo.textContent = tool.name;
+
 window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyF') heatmap.toggle();
+  const picked = TOOLS.find((t) => t.key === e.code);
+  if (picked) {
+    tool = picked;
+    toolInfo.textContent = tool.name;
+  }
 });
 
 const markers = createMarkers();
@@ -76,9 +98,9 @@ onClick(renderer.domElement, (button, x, y) => {
   if (button === 0) {
     // Left-click: place.
     const target = placeTarget(p);
-    const error = checkPlace(grid, target, enemy.cells());
+    const error = checkPlace(grid, target, tool.block, enemy.cells());
     if (error) return message.show(error);
-    grid.set(target.x, target.y, target.z, Block.Placed);
+    grid.set(target.x, target.y, target.z, tool.block);
   } else if (button === 2) {
     // Right-click: delete.
     const error = checkDelete(grid, p.cell, enemy.cells());
@@ -101,7 +123,7 @@ function updateGhost(): void {
   const p = pointer && picker.pick(pointer.x, pointer.y);
   if (!p) return ghost.hide();
   const target = placeTarget(p);
-  ghost.show(target, checkPlace(grid, target, enemy.cells()) === null);
+  ghost.show(target, checkPlace(grid, target, tool.block, enemy.cells()) === null);
 }
 
 // --- Game loop ---------------------------------------------------------
@@ -115,9 +137,23 @@ function update(dt: number): void {
   message.update(dt);
   pathView.update(dt);
 
-  enemy.update(dt, grid, field); // logic first...
-  if (enemy.arrived) enemy = new Enemy(SPAWN);
-  enemyView.sync(enemy); // ...then copy the result to the screen
+  // Logic first: the enemy moves...
+  enemy.update(dt, grid, field);
+
+  // ...then the towers aim at where it is NOW, count down, and fire (damage).
+  const enemies = [enemy];
+  for (const tower of towers.values()) {
+    tower.aim(enemies, grid);
+    tower.update(dt);
+  }
+
+  // Draw the lines before the respawn, so the killing shot still flashes
+  // at the spot where the enemy died.
+  targetLines.sync(towers.values());
+
+  // Reached the base or killed: a new one starts at the spawn.
+  if (enemy.arrived || enemy.dead) enemy = new Enemy(SPAWN);
+  enemyView.sync(enemy); // then copy the result to the screen
 }
 
 let last = performance.now();

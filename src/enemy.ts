@@ -11,18 +11,27 @@ import { nextCell } from './pathfinding';
 
 const SPEED = 1.5; // steps per second
 
-// Hop height on steps up and down. Its minimum depends on the box size in
-// enemyView.ts (0.6, so half = 0.3): going up, the box's front face reaches
+// The enemy's body is a box this big, resting on the cell's floor (y - 0.5).
+// Its middle is ENEMY_CENTER_Y from the cell's center. That's part of the
+// game rules (towers aim at it), so it lives here, not in the renderer.
+export const ENEMY_SIZE = 0.6;
+export const ENEMY_CENTER_Y = -0.5 + ENEMY_SIZE / 2;
+
+// Hop height on steps up and down. Its minimum depends on ENEMY_SIZE
+// (0.6, so half = 0.3): going up, the box's front face reaches
 // the block's edge when t² = 0.5 - 0.3, so t ≈ 0.447, and by then its bottom
 // must be a full block up. That gives HOP ≥ 1 / (4 * 0.447) ≈ 0.56.
 // A bigger box needs a bigger hop.
 const HOP = 0.6;
+
+export const MAX_HP = 5;
 
 export class Enemy {
   from: Cell;
   to: Cell;
   t: number;
   arrived = false; // true once it has reached the base
+  hp = MAX_HP;
 
   constructor(start: Cell) {
     // Start "already arrived" at the start cell (from = to, t = 1),
@@ -30,6 +39,15 @@ export class Enemy {
     this.from = start;
     this.to = start;
     this.t = 1;
+  }
+
+  get dead(): boolean {
+    return this.hp <= 0;
+  }
+
+  // Take damage. HP never goes below 0, so the view can use hp / MAX_HP directly.
+  hit(damage: number): void {
+    this.hp = Math.max(this.hp - damage, 0);
   }
 
   // Called every frame. `field` is the CURRENT flow field, so if the player

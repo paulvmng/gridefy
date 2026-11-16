@@ -8,7 +8,8 @@ import { GRID_HEIGHT, GRID_LENGTH, GRID_WIDTH, type Cell } from './config';
 export const Block = {
   Air: 0,
   Bedrock: 1,
-  Placed: 2,
+  Placed: 2, // a plain wall
+  Tower: 3, // solid like a wall (enemies path around it), and later it shoots
 } as const;
 export type Block = (typeof Block)[keyof typeof Block];
 

@@ -26,12 +26,17 @@ function pathProblem(grid: Grid, cell: Cell, block: Block, enemyCells: Cell[]): 
   return null;
 }
 
-export function checkPlace(grid: Grid, cell: Cell, enemyCells: Cell[] = []): string | null {
+// `block` is what's being placed. The "what if?" must test the REAL block:
+// a wall can be walked on, but a tower can't, so they change the paths differently.
+export function checkPlace(grid: Grid, cell: Cell, block: Block, enemyCells: Cell[] = []): string | null {
   if (!grid.inBounds(cell.x, cell.y, cell.z)) return 'Outside the build area';
   if (grid.isSolid(cell.x, cell.y, cell.z)) return 'There is already a block there';
   if (sameCell(cell, SPAWN)) return "Can't build on the spawn";
   if (sameCell(cell, BASE)) return "Can't build on the base";
-  return pathProblem(grid, cell, Block.Placed, enemyCells);
+  // No tower stacking: nothing goes directly on top of a tower.
+  // (Walls on walls and towers on walls are fine.)
+  if (grid.get(cell.x, cell.y - 1, cell.z) === Block.Tower) return "Can't build on top of a tower";
+  return pathProblem(grid, cell, block, enemyCells);
 }
 
 export function checkDelete(grid: Grid, cell: Cell, enemyCells: Cell[] = []): string | null {
