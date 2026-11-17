@@ -69,11 +69,18 @@ export class Grid {
 
 export function createWorld(): Grid {
   const grid = new Grid(GRID_WIDTH, GRID_HEIGHT, GRID_LENGTH);
+  resetWorld(grid);
+  return grid;
+}
+
+// Back to the starting world, IN PLACE: the renderers keep a reference to
+// this grid, so we change its cells instead of making a new Grid.
+export function resetWorld(grid: Grid): void {
+  grid.cells.fill(Block.Air);
   // Fill the bottom layer with bedrock.
   for (let x = 0; x < grid.width; x++) {
     for (let z = 0; z < grid.length; z++) {
       grid.set(x, 0, z, Block.Bedrock);
     }
   }
-  return grid;
 }

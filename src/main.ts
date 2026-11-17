@@ -3,7 +3,7 @@ import { SPAWN, type Cell } from './config';
 import { Enemy } from './enemy';
 import { Game } from './game';
 import { EnemyView, MAX_ENEMIES } from './render/enemyView';
-import { Block, createWorld } from './grid';
+import { Block, createWorld, resetWorld } from './grid';
 import { checkDelete, checkPlace } from './edit';
 import { createScene } from './render/scene';
 import { BlockRenderer } from './render/blocks';
@@ -89,7 +89,8 @@ scene.add(enemyView.mesh);
 const enemyCells = () => enemies.flatMap((e) => e.cells());
 
 // The match: lives, money and waves. The HUD just shows what's in it.
-const game = new Game();
+// `let`, because restart() swaps in a fresh Game.
+let game = new Game();
 const livesInfo = document.getElementById('lives')!;
 const moneyInfo = document.getElementById('money')!;
 const waveInfo = document.getElementById('wave')!;
@@ -102,6 +103,23 @@ function showHud(): void {
   waveInfo.textContent = `${n}/${w.total}${next}`;
 }
 showHud();
+
+// --- Restart -----------------------------------------------------------
+// Reset the MATCH (world, lives, money, waves, enemies) but keep the APP
+// (renderer, meshes, camera, heatmap toggle, tool). The meshes only copy the
+// data, so once the data is reset, the usual redraws catch up.
+function restart(): void {
+  resetWorld(grid);
+  game = new Game();
+  enemies = [];
+  refreshWorld(); // boxes, towers (all gone now), flow field, path, heatmap
+  message.hide();
+  showHud();
+}
+
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyR' && game.over) restart(); // only once the match has ended
+});
 
 // --- Editing -----------------------------------------------------------
 
@@ -202,8 +220,8 @@ function update(dt: number): void {
     if (enemy.dead) game.enemyKilled();
   }
   showHud();
-  if (game.lost) message.show('Game over! Reload the page to play again.', Infinity);
-  else if (game.won) message.show('You win! Every wave cleared. Reload to play again.', Infinity);
+  if (game.lost) message.show('Game over! Press R to play again.', Infinity);
+  else if (game.won) message.show('You win! Every wave cleared. Press R to play again.', Infinity);
 
   enemies = enemies.filter((e) => !e.arrived && !e.dead);
   enemyView.sync(enemies); // then copy the result to the screen
