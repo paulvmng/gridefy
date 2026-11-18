@@ -117,8 +117,20 @@ function restart(): void {
   showHud();
 }
 
+// --- Pause -------------------------------------------------------------
+// Pause is an APP thing (like the camera), not a match rule, so it lives here
+// and not in Game. It only stops match time: update() returns early, while
+// frame() keeps drawing.
+let paused = false;
+const pausedInfo = document.getElementById('paused')!;
+function setPaused(value: boolean): void {
+  paused = value;
+  pausedInfo.classList.toggle('visible', paused);
+}
+
 window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyR' && game.over) restart(); // only once the match has ended
+  if (e.code === 'KeyP' && !game.over) setPaused(!paused); // nothing to pause after the end
 });
 
 // --- Editing -----------------------------------------------------------
@@ -190,6 +202,13 @@ function update(dt: number): void {
   // frame (see frame()), so the board stays on screen, frozen.
   if (game.over) return ghost.hide();
   updateGhost();
+
+  // Paused: a "planning pause". The ghost above still updates, so you can
+  // build, but time stands still: no spawns, no moving, no shooting, and the
+  // wave countdown waits. The dt clamp in frame() means no jump on unpause.
+  // The one thing still redrawn: the target lines, so deleting a tower while
+  // paused also removes its line.
+  if (paused) return targetLines.sync(towers.values());
 
   // Spawn when the waves say so. `enemies.length` is how many are alive: the
   // waves wait for 0 before starting the next break (or declaring the win).

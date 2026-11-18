@@ -40,6 +40,24 @@ canvas {
 }
 #msg.visible { opacity: 1; }
 
+/* Its own element, not the #msg: an error shown while paused would replace
+   the pause text and then fade it out. */
+#paused {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  font-size: 16px;
+  letter-spacing: 0.05em;
+  pointer-events: none;
+  display: none;
+}
+#paused.visible { display: block; }
+
 #hud .spawn { color: #ff5a5a; }
 #hud .base  { color: #4da3ff; }
 #hud .path  { color: #ffd23f; }
