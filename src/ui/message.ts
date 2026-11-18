@@ -19,6 +19,12 @@ export class Message {
     this.timeLeft = seconds;
   }
 
+  // Take it down right away (also a permanent one).
+  hide(): void {
+    this.timeLeft = 0;
+    this.el.classList.remove('visible');
+  }
+
   update(dt: number): void {
     if (this.timeLeft <= 0) return;
     this.timeLeft -= dt;
