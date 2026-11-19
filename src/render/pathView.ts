@@ -46,9 +46,15 @@ export class PathView {
     this.draw();
   }
 
+  // Toggled with V. A hidden mesh stays in the scene; the renderer just skips it.
+  toggle(): void {
+    this.mesh.visible = !this.mesh.visible;
+  }
+
   // Called every frame. Advance the phase and wrap it back into 0..1,
   // so the arrows loop forever.
   update(dt: number): void {
+    if (!this.mesh.visible) return; // nobody can see it, so skip the work
     this.phase = (this.phase + SPEED * dt) % 1;
     this.draw();
   }

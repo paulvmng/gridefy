@@ -64,6 +64,8 @@ toolInfo.textContent = tool.name;
 
 window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyF') heatmap.toggle();
+  if (e.code === 'KeyV') pathView.toggle();
+  if (e.code === 'KeyB') boundsOutline.visible = !boundsOutline.visible;
   const picked = TOOLS.find((t) => t.key === e.code);
   if (picked) {
     tool = picked;
@@ -72,7 +74,9 @@ window.addEventListener('keydown', (e) => {
 });
 
 const markers = createMarkers();
-scene.add(markers.spawn, markers.base, createBoundsOutline(grid));
+// Kept in a variable (not just added to the scene) so the B key can reach it.
+const boundsOutline = createBoundsOutline(grid);
+scene.add(markers.spawn, markers.base, boundsOutline);
 
 const picker = new Picker(camera, renderer.domElement, blocks.mesh);
 const ghost = new Ghost();
